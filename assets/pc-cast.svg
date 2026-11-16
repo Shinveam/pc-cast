@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <title>PC-Cast</title>
+  <desc>DLNA 投屏接收端主图标：Cast 缺口屏 + 三道信号弧 + 播放三角</desc>
+  <defs>
+    <linearGradient id="pc-bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5B87FF"/>
+      <stop offset="1" stop-color="#2346CC"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#pc-bg)"/>
+  <path d="M112 200 V136 A24 24 0 0 1 136 112 H384 A24 24 0 0 1 408 136 V312 A24 24 0 0 1 384 336 H240"
+        stroke="#FFFFFF" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M112 296 A40 40 0 0 1 152 336" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round"/>
+  <path d="M112 256 A80 80 0 0 1 192 336" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round"/>
+  <path d="M112 216 A120 120 0 0 1 232 336" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round"/>
+  <circle cx="112" cy="336" r="13" fill="#FFFFFF"/>
+  <path d="M272 184 L272 264 L336 224 Z" fill="#9CEBFF" stroke="#9CEBFF" stroke-width="12" stroke-linejoin="round"/>
+</svg>

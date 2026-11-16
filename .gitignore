@@ -1,0 +1,10 @@
+/bin/
+/dist/
+*.log
+*.tmp
+.DS_Store
+.idea/
+.vscode/
+
+# WorkBuddy 工作目录（含本地记忆、环境信息、辅助脚本），整体不推送到公开仓库。
+.workbuddy/
