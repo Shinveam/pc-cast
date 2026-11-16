@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Derive build metadata
+        id: meta
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "buildtime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Build release binaries
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          BUILDTIME: ${{ steps.meta.outputs.buildtime }}
+        run: |
+          set -e
+          LDFLAGS="-s -w -X pc-cast/app.Version=${VERSION} -X pc-cast/app.Commit=Shinveam -X pc-cast/app.BuildTime=${BUILDTIME}"
+          mkdir -p dist
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS -H=windowsgui" -o dist/pc-cast-windows-amd64.exe .
+          GOOS=darwin  GOARCH=arm64  go build -trimpath -ldflags "$LDFLAGS" -o dist/pc-cast-darwin-arm64 .
+          GOOS=linux   GOARCH=amd64  go build -trimpath -ldflags "$LDFLAGS" -o dist/pc-cast-linux-amd64 .
+          ls -lh dist/
+
+      - name: Create release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          name: PC-Cast ${{ steps.meta.outputs.version }}
+          generate_release_notes: true
+          files: |
+            dist/pc-cast-windows-amd64.exe
+            dist/pc-cast-darwin-arm64
+            dist/pc-cast-linux-amd64
