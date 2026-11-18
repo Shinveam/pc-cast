@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"pc-cast/internal/bundled"
 )
 
 // Capability 描述一个播放后端能被 DLNA 层控制到什么程度。
@@ -124,6 +126,10 @@ func ffplayGeometry(w, h int) []string {
 	return []string{"-x", fmt.Sprintf("%d", w), "-y", fmt.Sprintf("%d", h)}
 }
 
+// ModeBuiltin 是「内置播放器」的伪 ID：它不对应 catalog 里某个静态条目，
+// 由 choose 在 auto 分支优先注入，用户也可显式指定强制使用内置。
+const ModeBuiltin = "builtin"
+
 // catalogFn 可替换，便于单元测试注入其它平台的候选清单。
 var catalogFn = defaultCatalog
 
@@ -180,16 +186,13 @@ func windowsCatalog() []candidate {
 				return []string{"-ss", fmt.Sprintf("%.3f", d.Seconds())}
 			}, versionArgs: []string{"-version"}},
 		// Windows 自带的桌面播放器，能直接打开 http 视频 URL；
-		// 比把 URL 交给默认浏览器更接近「播放」，因此排在 system 兜底之前。
+		// 作为较弱的 CapLaunch 候选排在完整控制后端之后，且不支持 HLS 直播。
 		{id: "wmplayer", name: "Windows Media Player",
 			paths: []string{
 				filepath.Join(envDirs("ProgramFiles")[0], "Windows Media Player", "wmplayer.exe"),
 				`C:\Program Files\Windows Media Player\wmplayer.exe`,
 				`C:\Program Files (x86)\Windows Media Player\wmplayer.exe`,
 			}, capability: CapLaunch, fullscreenPostArgs: []string{"/fullscreen"}},
-		{id: "system", name: "系统默认程序", names: []string{"rundll32.exe"},
-			paths:      []string{filepath.Join(envDirs("SystemRoot")[0], "System32", "rundll32.exe")},
-			capability: CapSystem, args: []string{"url.dll,FileProtocolHandler"}},
 	}
 }
 
@@ -207,7 +210,6 @@ func darwinCatalog() []candidate {
 			}, versionArgs: []string{"--version"}},
 		{id: "ffplay", name: "ffplay", names: []string{"ffplay"}, capability: CapLaunch,
 			fullscreenArg: "-fs", geometryArgs: ffplayGeometry, versionArgs: []string{"-version"}},
-		{id: "system", name: "系统默认程序", paths: []string{"/usr/bin/open"}, capability: CapSystem},
 	}
 }
 
@@ -225,7 +227,6 @@ func linuxCatalog() []candidate {
 			fullscreenArg: "-fs", geometryArgs: ffplayGeometry, versionArgs: []string{"-version"}},
 		{id: "celluloid", name: "Celluloid", names: []string{"celluloid"}, capability: CapLaunch},
 		{id: "totem", name: "Totem", names: []string{"totem"}, capability: CapLaunch},
-		{id: "system", name: "系统默认程序", names: []string{"xdg-open"}, capability: CapSystem},
 	}
 }
 
@@ -242,8 +243,35 @@ func envDirs(keys ...string) []string {
 	return out
 }
 
+// builtinCandidate 是内置播放器的动态候选。它不在静态 catalog 里，
+// 由 withBuiltin 在 auto / 显式内置模式下插到候选链最前。
+func builtinCandidate() candidate {
+	return candidate{
+		id: ModeBuiltin, name: "内置 mpv",
+		capability: CapFull,
+	}
+}
+
+// withBuiltin 在候选链最前插入内置播放器（仅当该平台确实内置了二进制）。
+// macOS / Linux 无内置数据，返回原链，行为与此前完全一致。
+func withBuiltin(cands []candidate) []candidate {
+	if !bundled.Available() {
+		return cands
+	}
+	out := make([]candidate, 0, len(cands)+1)
+	out = append(out, builtinCandidate())
+	return append(out, cands...)
+}
+
 // probe 找到候选的可执行文件；不执行任何外部命令，因此可以在 UI 线程安全调用。
+// 内置候选是唯一例外：它只需检查数据是否存在，解压推迟到真正构建播放器时。
 func probe(c candidate) (string, bool) {
+	if c.id == ModeBuiltin {
+		if bundled.Available() {
+			return "builtin:mpv", true // 占位路径；真实路径由 buildPlayer 取
+		}
+		return "", false
+	}
 	for _, n := range c.names {
 		if p, err := exec.LookPath(n); err == nil && p != "" {
 			return p, true

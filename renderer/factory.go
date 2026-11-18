@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 
+	"pc-cast/internal/bundled"
 	"pc-cast/logging"
 )
 
@@ -14,9 +15,12 @@ type ModeOption struct {
 	Label string
 }
 
-// ModeOptions 返回可选的播放器模式（自动 + 本机探测到的后端 + 自定义）。
+// ModeOptions 返回可选的播放器模式（自动 + 内置 + 本机探测到的后端 + 自定义）。
 func ModeOptions() []ModeOption {
 	opts := []ModeOption{{ModeAuto, "自动选择（推荐）"}}
+	if bundled.Available() {
+		opts = append(opts, ModeOption{ModeBuiltin, "内置 mpv · 完整控制"})
+	}
 	seen := make(map[string]bool)
 	for _, d := range Available() {
 		if d.ID == "none" || seen[d.ID] {
@@ -35,12 +39,18 @@ func NewPlayer(opts Options, log *slog.Logger) (Player, Descriptor, []string) {
 	excluded := make(map[string]bool)
 	notes := make([]string, 0, 2)
 
-	for attempt := 0; attempt < 4; attempt++ {
-		cands := make([]candidate, 0, len(catalogFn()))
+	for attempt := 0; attempt < 6; attempt++ {
+		base := make([]candidate, 0, len(catalogFn())+1)
 		for _, c := range catalogFn() {
 			if !excluded[c.id] {
-				cands = append(cands, c)
+				base = append(base, c)
 			}
+		}
+		// 内置播放器始终作为首选注入：auto 模式命中最先的优先级，
+		// 显式指定 builtin 时 choose 也能按 ID 精确选中它。
+		cands := withBuiltin(base)
+		if excluded[ModeBuiltin] {
+			cands = base
 		}
 		sel := choose(opts.Mode, opts.CustomPath, cands, probe)
 		if sel.fallback != "" {
@@ -61,11 +71,8 @@ func NewPlayer(opts Options, log *slog.Logger) (Player, Descriptor, []string) {
 			continue
 		}
 		d := Describe(p)
-		if d.Capability == CapSystem {
-			notes = append(notes, "未检测到 mpv/VLC 等播放器，已使用系统默认程序打开（无法暂停、停止或上报进度）")
-		}
 		if d.Capability != CapFull {
-			notes = append(notes, "安装 mpv 或 VLC 可获得完整控制（真实进度、暂停、跳转、音量），并让 HLS 直播流持续稳定播放")
+			notes = append(notes, "当前后端不支持完整 IPC 控制（暂停/进度为估算值）；如需完整控制请安装 mpv 或 VLC")
 		}
 		if len(notes) > 0 {
 			d.Note = joinNotes(notes) + "；" + d.Note
@@ -77,7 +84,7 @@ func NewPlayer(opts Options, log *slog.Logger) (Player, Descriptor, []string) {
 		return p, d, notes
 	}
 
-	notes = append(notes, "未找到任何可用播放器，请在「设置 → 播放器」中指定可执行文件路径")
+	notes = append(notes, "未找到任何可用播放器，请在「设置 → 播放器」中指定可执行文件路径，或重新安装程序以恢复内置播放器")
 	none := selection{cand: candidate{id: "none", name: "无可用播放器", capability: CapNone}}
 	p := NewExternal(none, opts, log)
 	_ = p.Start()
@@ -85,6 +92,19 @@ func NewPlayer(opts Options, log *slog.Logger) (Player, Descriptor, []string) {
 }
 
 func buildPlayer(sel selection, opts Options, log *slog.Logger) Player {
+	// 内置候选：此刻才真正解压并取路径（probe 阶段刻意不解压）。
+	if sel.cand.id == ModeBuiltin {
+		p, err := bundled.Path()
+		if err != nil {
+			logging.Warn(log, "player", "内置播放器不可用", map[string]any{"error": err.Error()})
+			// 返回一个必然 Start 失败的占位，由 NewPlayer 的降级循环跳到下一后端。
+			return NewExternal(selection{cand: candidate{id: ModeBuiltin, name: "内置 mpv", capability: CapNone}}, opts, log)
+		}
+		mpvOpts := opts
+		mpvOpts.MPVPath = p
+		mpvOpts.Builtin = true
+		return New(mpvOpts, log)
+	}
 	if sel.cand.capability != CapFull {
 		return NewExternal(sel, opts, log)
 	}

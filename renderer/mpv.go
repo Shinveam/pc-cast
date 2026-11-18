@@ -21,8 +21,11 @@ import (
 type Options struct {
 	// MPVPath 由 NewPlayer 探测后注入；留空时回退到 PATH 中的 mpv。
 	MPVPath      string
-	Mode         string // auto / 后端 ID / custom
+	Mode         string // auto / 后端 ID（mpv、builtin、vlc…）/ custom
 	CustomPath   string // Mode == custom 时使用的可执行文件
+	// Builtin 标记该 MPV 实例用的是随程序内置、运行时解压的二进制，
+	// 仅影响 Descriptor 的展示名，不改变任何播放行为。
+	Builtin      bool
 	Fullscreen   bool
 	AutoPlay     bool
 	WindowWidth  int // 0 表示跟随视频原始尺寸
@@ -618,8 +621,12 @@ func (m *MPV) resolvePath() (string, error) {
 }
 
 func (m *MPV) Descriptor() Descriptor {
+	name, id := "mpv", "mpv"
+	if m.opts.Builtin {
+		name, id = "内置 mpv", ModeBuiltin
+	}
 	return Descriptor{
-		ID: "mpv", Name: "mpv", Path: m.Path(), Version: m.Version(),
+		ID: id, Name: name, Path: m.Path(), Version: m.Version(),
 		Capability: CapFull, Note: capabilityNote(CapFull),
 	}
 }

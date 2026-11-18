@@ -313,6 +313,16 @@ func (a *Application) onConfigChange(old, next config.Config) {
 	}
 }
 
+// playerNotifyLine 生成启动弹窗里的播放器行。
+// 内置 mpv / VLC 等完整控制后端已是默认预期，「（完整控制）」只是赘述，故省略；
+// 弱后端则保留能力标签，让用户在弹窗里就能看到降级提示。
+func playerNotifyLine(d renderer.Descriptor) string {
+	if d.Capability == renderer.CapFull {
+		return "播放器：" + d.Name
+	}
+	return "播放器：" + d.Name + "（" + d.Capability.Label() + "）"
+}
+
 func (a *Application) notifyStartup(warnings []string, note string) {
 	title := "PC-Cast 已启动"
 	lines := make([]string, 0, 4)
@@ -320,7 +330,7 @@ func (a *Application) notifyStartup(warnings []string, note string) {
 		lines = append(lines, "服务地址："+s.BaseURL())
 	}
 	if d := a.currentDesc(); d.Name != "" {
-		lines = append(lines, "播放器："+d.Name+"（"+d.Capability.Label()+"）")
+		lines = append(lines, playerNotifyLine(d))
 	}
 	if !a.cfg.Get().CastEnabled {
 		lines = append(lines, "投屏功能当前为关闭状态，右键托盘勾选「启用投屏」即可恢复")

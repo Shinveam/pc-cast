@@ -154,7 +154,7 @@ func (v *settingsView) view(c *ui.Context) {
 	t := c.Theme()
 	ui.Column(c).Fill().Padding(20).Gap(10).Children(func() {
 		ui.Text(c, "PC-Cast 设置").FontSize(20).Bold()
-		ui.Text(c, "播放器按运行环境自动选择；修改端口、网卡或播放器后服务会自动重启。").FontSize(11).TextColor(t.TextMuted)
+		ui.Text(c, "默认使用程序内置的 mpv 播放器；也可在下方切换为本机安装的播放器。修改端口、网卡或播放器后服务会自动重启。").FontSize(11).TextColor(t.TextMuted)
 		ui.Text(c, "右键托盘图标可开启 / 关闭投屏功能；关闭后手机将无法发现此设备。").FontSize(11).TextColor(t.TextMuted)
 		ui.Divider(c)
 		ui.Scroll(c).Grow(1).Children(func() {
