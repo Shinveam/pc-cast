@@ -33,20 +33,51 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
           BUILDTIME: ${{ steps.meta.outputs.buildtime }}
         run: |
-          set -e
+          set -euo pipefail
           LDFLAGS="-s -w -X pc-cast/app.Version=${VERSION} -X pc-cast/app.Commit=Shinveam -X pc-cast/app.BuildTime=${BUILDTIME}"
-          mkdir -p dist
-          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS -H=windowsgui" -o dist/pc-cast-windows-amd64.exe .
-          GOOS=darwin  GOARCH=arm64  go build -trimpath -ldflags "$LDFLAGS" -o dist/pc-cast-darwin-arm64 .
-          GOOS=linux   GOARCH=amd64  go build -trimpath -ldflags "$LDFLAGS" -o dist/pc-cast-linux-amd64 .
-          ls -lh dist/
+          mkdir -p dist/raw
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS -H=windowsgui" -o dist/raw/pc-cast.exe .
+          GOOS=darwin  GOARCH=arm64  go build -trimpath -ldflags "$LDFLAGS" -o dist/raw/pc-cast-darwin-arm64 .
+          GOOS=linux   GOARCH=amd64  go build -trimpath -ldflags "$LDFLAGS" -o dist/raw/pc-cast-linux-amd64 .
+          ls -lh dist/raw/
 
-      - name: Create release and upload assets
+      # Windows exe 内置 GPL 许可的 mpv，必须随附 NOTICE 全文与源码地址；
+      # 三个平台统一按 zip 分发，顶层目录包裹，解压即用。
+      - name: Package archives with license and docs
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          command -v zip >/dev/null || { echo "zip is required"; exit 1; }
+
+          package() {
+            platform="$1"
+            binary="$2"
+            exe_name="$3"
+            pkg="pc-cast-v${VERSION}-${platform}"
+            stage="dist/stage/${pkg}"
+            mkdir -p "$stage/doc"
+            cp "$binary" "$stage/${exe_name}"
+            cp README.md LICENSE THIRD_PARTY_NOTICES.md "$stage/"
+            cp doc/*.md "$stage/doc/"
+            (cd dist/stage && zip -qr "../${pkg}.zip" "$pkg")
+          }
+
+          package windows-amd64 dist/raw/pc-cast.exe          pc-cast.exe
+          package darwin-arm64  dist/raw/pc-cast-darwin-arm64 pc-cast
+          package linux-amd64   dist/raw/pc-cast-linux-amd64  pc-cast
+
+          echo "=== 归档内容 ==="
+          for z in dist/*.zip; do echo "--- $z"; unzip -l "$z"; done
+          ls -lh dist/*.zip
+
+      - name: Create release and upload archives
         uses: softprops/action-gh-release@v2
         with:
           name: PC-Cast ${{ steps.meta.outputs.version }}
           generate_release_notes: true
+          overwrite_files: true
           files: |
-            dist/pc-cast-windows-amd64.exe
-            dist/pc-cast-darwin-arm64
-            dist/pc-cast-linux-amd64
+            dist/pc-cast-v${{ steps.meta.outputs.version }}-windows-amd64.zip
+            dist/pc-cast-v${{ steps.meta.outputs.version }}-darwin-arm64.zip
+            dist/pc-cast-v${{ steps.meta.outputs.version }}-linux-amd64.zip
