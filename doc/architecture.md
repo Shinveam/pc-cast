@@ -6,16 +6,30 @@
 
 ## 播放器能力分级
 
-程序不捆绑播放器，启动时按 `用户指定 > 完整控制 > 基础播放 > 系统默认` 挑选；握手失败最多重试 4 轮并排除已失败后端。
+Windows 版随程序内置 mpv（v0.42.0）：压缩数据以 `go:embed` 编入 exe，首次运行解压到 `%AppData%\pc-cast\bundled-mpv\<版本>\`。`auto` 模式把内置播放器置于候选链首位；用户显式指定（`builtin` / `mpv` / `vlc` / `custom`）时按 ID 精确命中。启动失败的后端被排除后重试，最多 6 轮；内置失败则降级到本机其他完整控制后端。**默认链路不含「系统默认程序」兜底**——`CapSystem` 枚举与相关防御分支仅为兼容保留，三个平台的候选清单都不会产生该能力。
 
 | 档位 | 后端 | 播放 | 暂停 / 继续 | 跳转 | 音量 | 进度 / 状态 | HLS 直播 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `CapFull` 完整控制 | **mpv**（JSON IPC）、**VLC 3.x**（HTTP Lua） | ✅ | ✅ 真实 | ✅ 真实 | ✅ 真实 | ✅ 真实 | ✅ 持续刷新 |
+| `CapFull` 完整控制 | **内置 mpv**（Windows）、本机 **mpv**（JSON IPC）、**VLC 3.x**（HTTP Lua） | ✅ | ✅ 真实 | ✅ 真实 | ✅ 真实 | ✅ 真实 | ✅ 持续刷新 |
 | `CapLaunch` 基础播放 | PotPlayer、MPC-BE/HC、ffplay、Windows Media Player、IINA、Celluloid、Totem | ✅ | ⚠️ 杀进程 / 重拉 | ⚠️ 多数仅记账 | ⚠️ 仅记账 | ⚠️ 墙钟估算 | ⚠️ 取决于播放器 |
-| `CapSystem` 系统默认 | Windows `rundll32` / macOS `open` / Linux `xdg-open` | ⚠️ 交给默认程序 | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `CapSystem` 系统默认 | 已从候选清单移除（`rundll32` / `open` / `xdg-open`） | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | `CapNone` | 无可用后端 | ❌ | — | — | — | 设备仍可被发现 | ❌ |
 
-> **强烈建议安装 mpv 或 VLC 3.x。** 以 Windows Media Player 为例：它把 `.m3u8` 当静态播放列表读，只能播快照里的 2~3 个分片就 EOS；`CapLaunch` 的暂停实为杀掉进程、音量只改内部记账值，手机上的按钮虽亮但不真正生效。安装后重启程序或点设置页「重新探测」即自动升级为 `CapFull`，无需改代码。VLC 的 HTTP 接口参数（端口、随机密码）由程序自动注入，无需手工配置。
+> **Windows 版开箱即用**：内置 mpv 原生支持 HLS，切台走 JSON IPC `loadfile`，不依赖进程重启。若运行时日志显示 `backend=wmplayer`，说明跑的是未内置播放器的旧版 exe：WMP 会把 `.m3u8` 当静态播放列表读，播完开头几个分片即 EOS，切台也可能被单实例机制吞掉。macOS / Linux 未内置二进制，建议安装 mpv 或 VLC 3.x 升级到 `CapFull`；安装后重启程序或点设置页「重新探测」即可。VLC 的 HTTP 接口参数（端口、随机密码）由程序自动注入，无需手工配置。
+
+---
+
+## 托盘图标状态
+
+`trayui/icon.go` 的 `currentStatus()` 是托盘图标、桌面通知与关于窗口状态徽标的唯一状态来源，优先级如下：
+
+| 状态 | 图标角标 | 文案 | 触发条件 |
+| --- | --- | --- | --- |
+| 播放中 | 绿色 | `投屏中` | 播放器状态为 `StatePlaying`，优先于其余状态 |
+| 未播放 | 琥珀色 | `空闲 · 等待投屏` | 默认状态，含完整后端（内置 mpv）待机；弱后端追加`（能力受限 · X）` |
+| 投屏已关闭 | 灰阶 | `投屏已关闭` | `cast_enabled=false` |
+
+琥珀角统一表达「未在播放」，原先独立的「待机图」状态已退役。启动弹窗里的播放器行由 `playerNotifyLine()` 生成：`CapFull` 后端只显示名称（如「播放器：内置 mpv」），弱后端才附能力标签作降级提示；设置页下拉与软件信息窗口仍显示能力标签。
 
 ---
 
@@ -49,10 +63,13 @@ pc-cast/
 │   ├── didl.go                # DIDL-Lite 解析与生成
 │   └── scpd/                  # 内嵌标准服务描述模板（go:embed）
 ├── renderer/                  # Player 接口与播放后端
-│   ├── detect.go / factory.go # 候选清单、能力探测、自动选择与降级
-│   ├── mpv.go / vlc.go        # CapFull：JSON IPC / HTTP Lua
-│   ├── external.go            # CapLaunch / CapSystem 与进度估算
+│   ├── detect.go / factory.go # 候选清单、内置置顶、能力探测、选择与降级
+│   ├── mpv.go / vlc.go        # CapFull：JSON IPC / HTTP Lua；内置 mpv 复用 mpv.go
+│   ├── external.go            # CapLaunch 与进度估算（CapSystem 仅兼容保留）
 │   └── ipc_*.go / exec_*.go   # 平台相关：命名管道 / domain socket、无窗口进程
+├── internal/bundled/          # 内置 mpv：go:embed 压缩数据、解压与缓存路径
+│   ├── bundled.go / data_*.go # 按平台提供数据；仅 Windows 有真实二进制
+│   └── data/mpv-*.exe.gz      # gzip 压缩的 mpv 可执行文件（随源码提交）
 ├── trayui/                    # 托盘菜单、设置窗口、软件信息、图标取图策略
 ├── assets/                    # 图标与状态图（go:embed）、SVG 母版
 ├── logging/                   # slog JSON Handler

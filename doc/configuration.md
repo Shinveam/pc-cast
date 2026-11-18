@@ -21,7 +21,7 @@
 | `friendly_name` | `PC-Cast (<主机名>)` | 手机上显示的设备名 |
 | `port` | `0` | `0` = 优先 8768，占用则 +1 探测（最多 12 次），全失败才随机；显式端口被占用会直接报错 |
 | `bind_ip` | `""` | 空 = 全部网卡；可指定单张网卡 IPv4 |
-| `player_mode` | `auto` | `auto` / 后端 ID（`mpv`、`vlc`、`wmplayer`…）/ `custom` |
+| `player_mode` | `auto` | `auto`（优先内置 mpv）/ `builtin`（强制内置）/ 后端 ID（`mpv`、`vlc`、`wmplayer`…）/ `custom` |
 | `player_path` | `""` | 仅 `custom` 模式生效的可执行文件绝对路径 |
 | `fullscreen` | `false` | 命令行全屏开关（部分后端不支持） |
 | `auto_play` | `true` | 收到 URI 后是否自动播放 |
@@ -32,6 +32,18 @@
 | `device_uuid` | 随机生成 | 持久化，保证设备身份跨重启稳定 |
 
 配置由设置页原子写入，也支持手工编辑（保存后需重启或触发一次配置变更）。旧版 `mpv_path` 字段在加载时自动迁移。
+
+### 内置播放器
+
+Windows 版随程序内置 mpv（v0.42.0），由 `auto` 模式默认优先使用，无需用户另行安装。二进制以 gzip 压缩后编入 exe，首次启动解压到 `%AppData%\pc-cast\bundled-mpv\<版本>\mpv.exe`，后续复用；目录名带内容版本，升级时旧版本自动失效。解压目录可安全删除，下次启动会重新生成。
+
+- `player_mode=auto`：内置优先，内置启动失败则依次尝试本机安装的 mpv、VLC 等完整控制后端；不再回退到「系统默认程序」。
+- `player_mode=builtin`：启动时锁定内置播放器（即使本机装有更新的系统 mpv）；若内置解压或启动失败，仍会按上述顺序降级到其他完整控制后端，并在启动通知里给出提示，不会直接报错退出。
+- `player_mode=mpv` / `vlc` / `wmplayer` / `custom`：按用户显式选择，内置不参与；指定后端不可用或启动失败时同样自动降级。
+
+无论哪种模式，启动失败的后端都会被排除后重试，最多 6 轮；全部失败时设备仍可被发现，但无法播放。
+
+macOS / Linux 暂未内置二进制（官方不分发跨平台静态包），沿用本机探测，无 system 兜底。详见 [故障排查](troubleshooting.md)。
 
 ---
 

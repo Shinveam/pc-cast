@@ -1,6 +1,6 @@
 BINARY := pc-cast
 CMD := .
-VERSION ?= 0.5.0
+VERSION ?= 0.6.0
 # 构建标识：默认恒定显示专属名称；需要 git 短哈希时用 `make build COMMIT=xxx` 覆盖
 COMMIT ?= Shinveam
 BUILDTIME := $(shell date +%Y-%m-%dT%H:%M:%S)

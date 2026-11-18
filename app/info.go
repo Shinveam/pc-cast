@@ -8,7 +8,7 @@ import (
 
 // 由构建脚本通过 -ldflags -X 注入；Commit 缺省为专属构建标识。
 var (
-	Version   = "0.1.0"
+	Version   = "0.6.0"
 	Commit    = "Shinveam"
 	BuildTime = "unknown"
 )
@@ -37,7 +37,7 @@ func BuildInfo() Info {
 		OS:        runtime.GOOS,
 		Arch:      runtime.GOARCH,
 		Protocol:  "DLNA / UPnP MediaRenderer:1 (AVTransport, RenderingControl, ConnectionManager)",
-		Renderer:  "按运行环境自动选择（mpv / VLC / 其它本机播放器 / 系统默认）",
+		Renderer:  "内置 mpv（Windows）/ 本机 mpv / VLC / 其它本机播放器",
 		UIToolkit: "mygo (native UI, pure Go)",
 	}
 }
