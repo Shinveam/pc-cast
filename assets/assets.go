@@ -3,8 +3,8 @@
 //
 // 设计母版见 assets/*.svg，位图由 .workbuddy/tools/gen_icons.go 生成：
 //   - 彩色主图标：蓝色 squircle + Cast 缺口屏 + 信号弧 + 播放三角
-//   - 状态变体：待机 / 投屏中 / 能力受限 / 投屏已关闭，以绿 / 琥珀 / 灰阶
-//     语义色角标区分，深浅主题共用同一张图，不随系统主题反色
+//   - 状态变体：未播放（琥珀）/ 投屏中（绿）/ 投屏已关闭（灰阶），
+//     语义色角标区分，深浅主题共用同一张图，不随系统主题反色；StatusIdle 仅作兜底
 //   - 系统托盘使用 32px 状态变体，通知与关于窗口使用 64px 状态变体
 //
 // 所有返回值都是内嵌数据的副本，调用方可以安全持有或修改。
@@ -55,9 +55,9 @@ var trayDisabled []byte
 type Status uint8
 
 const (
-	StatusIdle     Status = iota // 待机 / 服务已就绪
+	StatusIdle     Status = iota // 待机；仅作未知状态回退，运行状态不再取此值
 	StatusActive                 // 投屏中
-	StatusLimited                // 能力受限（如未装 mpv / VLC）
+	StatusLimited                // 未在播放（含完整后端待机与弱后端能力受限）
 	StatusDisabled               // 投屏已关闭（cast_enabled = false）
 )
 

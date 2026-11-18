@@ -209,7 +209,7 @@ func (u *UI) refreshStatus() {
 		return
 	}
 	// 必须放在所有提前 return 之前：总开关关闭、播放器尚未就绪时，
-	// 也要把「已关闭 / 待机」态刷到托盘图标上。
+	// 也要把「已关闭 / 未播放（琥珀）」态刷到托盘图标上。
 	u.applyTrayIcon()
 	// 总开关关闭时播放器已被释放，不能用 player 状态覆盖菜单文案。
 	if u.d.Config != nil && !u.d.Config.Get().CastEnabled {

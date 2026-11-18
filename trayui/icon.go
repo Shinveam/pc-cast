@@ -10,9 +10,9 @@ import (
 // 灰阶角标表达运行状态，深浅主题共用同一张图；托盘、通知、关于窗口状态徽标
 // 取自同一套变体，仅按场景选择 32 / 48 / 64px 尺寸。
 
-// trayIcon 返回创建托盘瞬间的占位图（待机态），此时服务尚未启动、
-// 状态必为待机；随后 Ready 会按实际状态校正一次。
-func trayIcon() []byte { return assets.TrayStatusIcon(assets.StatusIdle) }
+// trayIcon 返回创建托盘瞬间的占位图：此时服务尚未启动、状态必为「未播放」，
+// 按现行语义用琥珀角的 status-limited；随后 Ready 会按实际状态校正一次。
+func trayIcon() []byte { return assets.TrayStatusIcon(assets.StatusLimited) }
 
 // trayIconFor 返回当前运行状态对应的 32px 彩色状态变体，用于系统托盘。
 func trayIconFor(s assets.Status) []byte { return assets.TrayStatusIcon(s) }
@@ -44,9 +44,12 @@ func notificationImage(style NotifyStyle) []byte {
 }
 
 // currentStatus 判定当前运行状态，是托盘图标、通知与关于窗口共用的唯一来源。
-// 优先级：总开关关闭 > 正在播放 > 能力受限 > 待机。
-// 「能力受限」是环境属性（未装 mpv / VLC 时会长期落在 CapLaunch / CapSystem
-// 后端），若排在播放态之前会永久遮蔽「投屏中」，使状态图标失去意义。
+// 优先级：总开关关闭 > 正在播放 > 未播放/能力受限（琥珀角）。
+//
+// 琥珀角的 StatusLimited 现在统一表达「未在播放」：既包括完整后端待机，
+// 也包括弱后端能力受限。文案区分两者——完整后端显示「空闲 · 等待投屏」，
+// 弱后端额外标注能力受限，避免把「待机」误读成「播放器有问题」。
+// 播放态优先于琥珀，否则投屏中图标会被常驻的受限/空闲态遮蔽。
 func (u *UI) currentStatus() (assets.Status, string) {
 	if u.d.Config != nil && !u.d.Config.Get().CastEnabled {
 		return assets.StatusDisabled, "投屏已关闭"
@@ -56,13 +59,14 @@ func (u *UI) currentStatus() (assets.Status, string) {
 			return assets.StatusActive, "投屏中"
 		}
 	}
+	label := "空闲 · 等待投屏"
 	if u.d.PlayerDesc != nil {
 		d := u.d.PlayerDesc()
 		if d.Name != "" && d.Capability != renderer.CapFull {
-			return assets.StatusLimited, "能力受限 · " + d.Capability.Label()
+			label = "空闲 · 等待投屏（能力受限 · " + d.Capability.Label() + "）"
 		}
 	}
-	return assets.StatusIdle, "待机 · 服务已就绪"
+	return assets.StatusLimited, label
 }
 
 // statusBadge 返回当前运行状态对应的彩色徽标与文案，供关于窗口展示。

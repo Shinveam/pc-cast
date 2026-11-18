@@ -47,15 +47,15 @@ func hasColorPlate(t *testing.T, b []byte) bool {
 	return opaque >= 800 && blue >= 100
 }
 
-// TestTrayIconIsColoredStatusVariant 确认托盘占位图是彩色待机变体，
+// TestTrayIconIsColoredStatusVariant 确认托盘占位图是彩色琥珀变体（未播放态），
 // 而不是上一版的透明底单色模板。
 func TestTrayIconIsColoredStatusVariant(t *testing.T) {
 	b := trayIcon()
 	if w, h := iconSize(t, b); w != 32 || h != 32 {
 		t.Fatalf("托盘图标规格 %dx%d，期望 32x32", w, h)
 	}
-	if !bytes.Equal(b, assets.TrayStatusIcon(assets.StatusIdle)) {
-		t.Fatal("托盘占位图未取自内嵌彩色待机变体")
+	if !bytes.Equal(b, assets.TrayStatusIcon(assets.StatusLimited)) {
+		t.Fatal("托盘占位图未取自内嵌彩色琥珀变体")
 	}
 	if !hasColorPlate(t, b) {
 		t.Fatal("托盘图标必须是彩色，不能退回单色模板")
@@ -128,8 +128,8 @@ func TestStatusBadge(t *testing.T) {
 	t.Run("idle", func(t *testing.T) {
 		u := castTestUI(t) // Player/PlayerDesc getter 均为 nil，需安全降级
 		img, label := u.statusBadge()
-		if !strings.Contains(label, "待机") || !bytes.Equal(img, assets.StatusImage(assets.StatusIdle)) {
-			t.Fatalf("待机态徽标错误: %q", label)
+		if !strings.Contains(label, "空闲") || !bytes.Equal(img, assets.StatusImage(assets.StatusLimited)) {
+			t.Fatalf("未播放态徽标错误: %q", label)
 		}
 	})
 
@@ -194,8 +194,8 @@ func TestCurrentStatus(t *testing.T) {
 		}
 	})
 	t.Run("idle", func(t *testing.T) {
-		if s, _ := castTestUI(t).currentStatus(); s != assets.StatusIdle {
-			t.Fatalf("无播放器时应为待机，得到 %d", s)
+		if s, _ := castTestUI(t).currentStatus(); s != assets.StatusLimited {
+			t.Fatalf("无播放器时应为琥珀未播放态，得到 %d", s)
 		}
 	})
 	t.Run("limited", func(t *testing.T) {
@@ -205,6 +205,17 @@ func TestCurrentStatus(t *testing.T) {
 		}
 		if s, _ := u.currentStatus(); s != assets.StatusLimited {
 			t.Fatalf("能力受限判定错误: %d", s)
+		}
+	})
+	t.Run("full backend idle is amber", func(t *testing.T) {
+		// 内置 mpv 是 CapFull；未播放时也要用琥珀图，不能退回 idle。
+		u := castTestUI(t)
+		u.d.PlayerDesc = func() renderer.Descriptor {
+			return renderer.Descriptor{Name: "内置 mpv", Capability: renderer.CapFull}
+		}
+		s, label := u.currentStatus()
+		if s != assets.StatusLimited || !strings.Contains(label, "空闲") || strings.Contains(label, "能力受限") {
+			t.Fatalf("完整后端未播放态错误: %d %q", s, label)
 		}
 	})
 	t.Run("playing beats limited", func(t *testing.T) {
